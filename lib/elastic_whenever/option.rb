@@ -46,7 +46,7 @@ module ElasticWhenever
       @subnets = []
       @schedule_file = 'config/schedule.rb'
       @iam_role = 'ecsEventsRole'
-      @rule_state = 'ENABLED'
+      @rule_state = 'ENABLED' # FIXME: schedule_state = 'ENABLED'
       @profile = nil
       @access_key = nil
       @secret_key = nil
