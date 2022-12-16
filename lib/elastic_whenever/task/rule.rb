@@ -9,6 +9,7 @@ module ElasticWhenever
       class UnsupportedOptionException < StandardError; end
 
       def self.fetch(option, rules: [], next_token: nil)
+        # FIXME: scheduler_client
         client = option.cloudwatch_events_client
         prefix = option.identifier
 

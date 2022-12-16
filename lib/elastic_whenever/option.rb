@@ -26,7 +26,8 @@ module ElasticWhenever
     attr_reader :aws_config
     attr_reader :ecs_client
     attr_reader :iam_client
-    attr_reader :cloudwatch_events_client
+    attr_reader :cloudwatch_events_client # FIXME: scheduler_client に置き換えて削除する
+    attr_reader :scheduler_client
 
     class InvalidOptionException < StandardError; end
 
@@ -147,8 +148,13 @@ module ElasticWhenever
       @iam_client ||= Aws::IAM::Client.new(aws_config)
     end
 
+    # FIXME: scheduler_client に置き換えて削除する
     def cloudwatch_events_client
       @cloudwatch_events_client ||= Aws::CloudWatchEvents::Client.new(aws_config)
+    end
+
+    def scheduler_client
+      @scheduler_client ||= Aws::Scheduler::Client.new(aws_config)
     end
 
     def validate!

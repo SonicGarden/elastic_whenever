@@ -15,6 +15,7 @@ module ElasticWhenever
       class InvalidContainerException < StandardError; end
 
       def self.fetch(option, rule)
+        # FIXME: scheduler_client
         client = option.cloudwatch_events_client
         targets = client.list_targets_by_rule(rule: rule.name).targets
         targets.map do |target|
