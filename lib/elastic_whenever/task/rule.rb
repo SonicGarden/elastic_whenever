@@ -1,5 +1,6 @@
 module ElasticWhenever
   class Task
+    # FIXME: Rule -> Schedule にクラス名を変えたほうがよさそう
     class Rule
       attr_reader :option
       attr_reader :name
@@ -9,17 +10,20 @@ module ElasticWhenever
       class UnsupportedOptionException < StandardError; end
 
       def self.fetch(option, rules: [], next_token: nil)
-        # FIXME: scheduler_client
-        client = option.cloudwatch_events_client
+        client = option.scheduler_client
         prefix = option.identifier
 
-        response = client.list_rules(name_prefix: prefix, next_token: next_token)
-        response.rules.each do |rule|
+        # TODO: group_name を指定して app & env ごとの schedule group を利用できるようにする
+        response = client.list_schedules(name_prefix: prefix, next_token: next_token)
+
+        response.schedules.each do |schedule|
+          # FIXME: 実機でレスポンスに以下が含まれているかを確認し、spec のモックを修正する
           rules << self.new(
             option,
-            name: rule.name,
-            expression: rule.schedule_expression,
-            description: rule.description,
+            name: schedule.name,
+            expression: schedule.schedule_expression,
+            expression_timezone: schedule.schedule_expression_timezone,
+            description: schedule.description,
             client: client
           )
         end
@@ -51,6 +55,7 @@ module ElasticWhenever
         end
       end
 
+      # FIXME: create_schedule (with time_zone)
       def create
         # See https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_PutRule.html#API_PutRule_RequestSyntax
         Logger.instance.message("Creating Rule: #{name} #{expression}")
@@ -62,6 +67,7 @@ module ElasticWhenever
         )
       end
 
+      # FIXME: delete_schedule
       def delete
         targets = client.list_targets_by_rule(rule: name).targets
         client.remove_targets(rule: name, ids: targets.map(&:id)) unless targets.empty?
@@ -71,10 +77,12 @@ module ElasticWhenever
 
       private
 
+      # FIXME: schedule_name
       def self.rule_name(option, expression, command)
         "#{option.identifier}_#{Digest::SHA1.hexdigest([option.key, expression, command.join("-")].join("-"))}"
       end
 
+      # FIXME: schedule_description
       def self.rule_description(identifier, expression, command)
         "#{identifier} - #{expression} - #{command.join(" ")}"
       end
