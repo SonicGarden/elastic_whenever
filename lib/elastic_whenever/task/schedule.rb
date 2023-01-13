@@ -92,7 +92,8 @@ module ElasticWhenever
           schedule_expression: expression,
           schedule_expression_timezone: expression_timezone,
           description: truncate(description, 512),
-          state: option.rule_state # FIXME: schedule_state に rename する
+          state: option.rule_state,
+          target: nil # FIXME: どうにかして Target Hash を作成する必要がある
         )
       end
 
