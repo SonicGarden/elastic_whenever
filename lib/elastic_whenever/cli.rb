@@ -64,6 +64,7 @@ module ElasticWhenever
       end
 
       targets = schedule.tasks.map do |task|
+        # TODO: schedule_expression_timezone を option から取得できるようにする
         task.commands.map do |command|
           Task::Target.new(
             option,
@@ -71,7 +72,7 @@ module ElasticWhenever
             definition: definition,
             container: option.container,
             commands: command,
-            rule: Task::Rule.convert(option, task.expression, command),
+            rule: Task::Rule.convert(option, task.expression, 'Asia/Tokyo', command),
             role: role,
           )
         end
@@ -85,21 +86,33 @@ module ElasticWhenever
       end
     end
 
-    def remote_rules
-      Task::Rule.fetch(option)
+    def remote_schedules
+      schedule_names = Task::Schedule.fetch_names(option)
+      Task::Schedule.fetch(option, names: schedule_names)
     end
 
     # Creates a rule but only persists the rule remotely if it does not exist
     def create_missing_rules_from_targets(targets)
-      cached_remote_rules = remote_rules
+      # FIXME: (memo)
+      # => Task::Target から Task::Rule を取得している
+      # => Task:Rule は Task::Target と一緒に new (convert) されている
+
+      # FIXME: Rule -> Schedule
+      cached_remote_rules = remote_schedules
       targets.each do |target|
         exists = cached_remote_rules.any? do |remote_rule|
           target.rule.name == remote_rule.name
         end
 
+        # すでにルールが存在する場合はスキップしている
+        # name が一致するかどうかをチェックしている
+        # name は option の各値と command から SHA1.hexdigest が生成されている
+        # 疑問: リビジョンはどうなる？ 毎回 delete & create の方が安全？
+        # => with_concurrent_modification_handling で retry しているから、作成したものはスキップする必要がありそう
         unless exists
-          target.rule.create
-          target.create
+          # FIXME: schedule.create
+          # target.rule.create
+          # target.create
         end
       end
     end

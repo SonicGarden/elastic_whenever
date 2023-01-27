@@ -25,7 +25,7 @@ module ElasticWhenever
         if response.next_token.nil?
           names
         else
-          fetch(option, names: names, next_token: response.next_token)
+          fetch_names(option, names: names, next_token: response.next_token)
         end
       end
 
@@ -35,18 +35,15 @@ module ElasticWhenever
         group_name = option.identifier
 
         names.map do |name|
-          response = client.get_schedule(
-            group_name: group_name,
-            name: schedule_summary.name
-          )
+          response = client.get_schedule(group_name: group_name, name: name)
 
           self.new(
             option,
             group_name: group_name,
-            name: schedules.name,
-            expression: schedules.schedule_expression,
-            expression_timezone: schedules.schedule_expression_timezone,
-            description: schedules.description,
+            name: response.name,
+            expression: response.schedule_expression,
+            expression_timezone: response.schedule_expression_timezone,
+            description: response.description,
             client: client
           )
         end
@@ -57,10 +54,14 @@ module ElasticWhenever
       end
 
       def self.convert(option, expression, expression_timezone, command)
+        group_name = option.identifier
+
         self.new(
           option,
+          group_name: group_name,
           name: schedule_name(option, expression, expression_timezone, command),
           expression: expression,
+          expression_timezone: expression_timezone,
           description: schedule_description(option.identifier, expression, expression_timezone, command)
         )
       end
@@ -93,9 +94,47 @@ module ElasticWhenever
           schedule_expression_timezone: expression_timezone,
           description: truncate(description, 512),
           state: option.rule_state,
-          target: nil # FIXME: どうにかして Target Hash を作成する必要がある
+          flexible_time_window: { maximum_window_in_minutes: 1, mode: 'OFF' },
+          input: nil, # required
+          role_arn: nil, # required
+          target: nil # FIXME: どうにかして Target Hash を作成する必要がある,
         )
       end
+
+      # AWSから考えるオプション
+      # フレックスタイムウィンドウ => オフでいい
+      # タイムゾーン => 基本は 'Asia/Tokyo'
+      # 開始日時、終了日時 = start_date, end_date => 指定なしでいい
+      # ターゲット: Amazon ECS RunTask
+      # ECSクラスター => arn (arn:aws:ecs .. cluster/[appname]-production...
+      # ECSタスク => ex. [appname]-production-rails
+      # リビジョン => 最新(latest) にしたい
+      # タスクカウント => 1 基本は1でしょう
+      # コンピューティングオプション => 起動タイプ FARGATE, プラットフォームなし
+      # subnets (public subnets)
+      # security-groups
+      # auto public-IP => YES
+      # commands:
+      # {
+      #   "containerOverrides": [{
+      #     "name": "rails",
+      #     "command": ["bundle", "exec", "rake", "execution-rake-task"]
+      #   }]
+      # }
+      # => POST
+      # {
+      #   description: '...', # 指定する
+      #   flexible_time_window: { maximum_window_in_minutes: 1, mode: 'OFF' }, # required / OFF固定でいい
+      #   group_name: '...', # identifier (application name "[appname]-[production]-rails") を指定する
+      #   name: '...', # required / identifier + 各種パラメータのダイジェスト
+      #   schedule_expression: '...', # required
+      #   schedule_expression_timezone: 'Asia/Tokyo', # option だが初期値を Tokyo にしておく
+      #   state: 'ENABLED', # option にある
+      #   target: (SEE: lib/elastic_whenever/task/target.rb),
+      #   input: '???', # input_json, { containerOverrides: [{ name: '$task-name', command: commands }]
+      #   role_arn: '' # 指定されたやつ or 作ったやつ
+      # }
+      #
 
       def delete
         # FIXME: EventBridge では target を rule とは別管理しているようだが Scheduler ではそうならない？
