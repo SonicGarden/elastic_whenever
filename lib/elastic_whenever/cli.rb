@@ -63,9 +63,11 @@ module ElasticWhenever
         role.create
       end
 
+      # FIXME: targets => event_bridge_schedules
       targets = schedule.tasks.map do |task|
         # TODO: schedule_expression_timezone を option から取得できるようにする
         task.commands.map do |command|
+          # FIXME: Task::Schedule.new(option, ...)
           Task::Target.new(
             option,
             cluster: cluster,
