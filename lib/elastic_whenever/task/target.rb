@@ -1,6 +1,6 @@
 module ElasticWhenever
   class Task
-    class Target
+    class Target # FIXME: このクラスは不要になる
       attr_reader :cluster
       attr_reader :definition
       attr_reader :container
@@ -32,19 +32,6 @@ module ElasticWhenever
           )
         end
       end
-
-
-      # 調べるオプション
-      # --
-      # cluster
-      # container
-      # commands = ひとつのコマンド、配列、スペースで結合して実行されるもの
-      # --
-      # assign_public_ip
-      # launch_type
-      # platform_version
-      # security_groups
-      # subnets
 
       def initialize(option, cluster:, definition:, container:, commands:, rule:, role:)
         unless definition.containers.include?(container)
@@ -80,25 +67,6 @@ module ElasticWhenever
       #     ]
       #   )
       # end
-
-      # NOTE: Aws::Scheduler::Client#create_schedule
-      #   target: {
-      #     arn: "...", # required / ECS Cluster の ARN
-      #     ecs_parameters: {
-      #       capacity_provider_strategy: ???          # 不要そう
-      #       launch_type: 'FARGATE',                  # => option.launch_type
-      #       network_configuration: {
-      #         awsvpc_configuration: {
-      #           assign_public_ip: "ENABLED",         # 必要 => option.assign_public_ip
-      #           security_groups: ["SecurityGroup"],  # DBにつなぐので准必須
-      #           subnets: ["Subnet"],                 # required public subnet が必要そう
-      #         },
-      #       },
-      #       platform_version: 'LATEST',              # option.platform_version
-      #       task_count: 1,
-      #       task_definition_arn: "TaskDefinitionArn" # (ECS タスクの ARN)
-      #     },
-      #   },
 
       private
 

@@ -1,6 +1,6 @@
 module ElasticWhenever
   class Task
-    class Schedule
+    class Schedule # rubocop:disable Metrics
       attr_reader :option
       attr_reader :group_name
       attr_reader :name
@@ -8,6 +8,13 @@ module ElasticWhenever
       attr_reader :expression_timezone
       attr_reader :description
       attr_reader :client
+
+      attr_reader :cluster
+      attr_reader :definition
+      attr_reader :role
+      attr_reader :commands
+
+      attr_reader :container
 
       class UnsupportedOptionException < StandardError; end
 
@@ -66,13 +73,23 @@ module ElasticWhenever
         )
       end
 
-      def initialize(option, group_name:, name:, expression:, expression_timezone:, description:, client: nil)
+      # FIXME: 引数を見直す必要あり
+      def initialize(option, cluster:, definition:, role:, commands:, expression:, client: nil)
         @option = option
-        @group_name = group_name
-        @name = name
+
+        @cluster = cluster
+        @definition = definition
+        @role = role
+        @commands = commands
+
+        @group_name = option.identifier
         @expression = expression
-        @expression_timezone = expression_timezone
-        @description = description
+        @expression_timezone = 'Asia/Tokyo'
+        @name = self.class.schedule_name(option, expression, expression_timezone, commands)
+        @description = self.class.schedule_description(option.identifier, expression, expression_timezone, commands)
+
+        @container = option.container
+
         if client != nil
           @client = client
         else
@@ -80,14 +97,18 @@ module ElasticWhenever
         end
       end
 
-      def create
+      def create # rubocop:disable Metrics
         # See https://docs.aws.amazon.com/sdk-for-ruby/v3/api/Aws/Scheduler/Client.html#create_schedule-instance_method
         Logger.instance.message("Creating Schedule: #{group_name}/#{name} #{expression}")
 
         # FIXME: create_schedule_group をどこで実施するか？
 
         # NOTE: このメソッドがよばれるときは schedule_group が存在する前提
-        client.create_schedule(
+        client.create_schedule(create_options)
+      end
+
+      def create_options
+        {
           group_name: group_name,
           name: name,
           schedule_expression: expression,
@@ -95,46 +116,41 @@ module ElasticWhenever
           description: truncate(description, 512),
           state: option.rule_state,
           flexible_time_window: { maximum_window_in_minutes: 1, mode: 'OFF' },
-          input: nil, # required
-          role_arn: nil, # required
-          target: nil # FIXME: どうにかして Target Hash を作成する必要がある,
-        )
+          input: input_json,
+          role_arn: role.arn,
+          target: target_hash
+        }
       end
 
-      # AWSから考えるオプション
-      # フレックスタイムウィンドウ => オフでいい
-      # タイムゾーン => 基本は 'Asia/Tokyo'
-      # 開始日時、終了日時 = start_date, end_date => 指定なしでいい
-      # ターゲット: Amazon ECS RunTask
-      # ECSクラスター => arn (arn:aws:ecs .. cluster/[appname]-production...
-      # ECSタスク => ex. [appname]-production-rails
-      # リビジョン => 最新(latest) にしたい
-      # タスクカウント => 1 基本は1でしょう
-      # コンピューティングオプション => 起動タイプ FARGATE, プラットフォームなし
-      # subnets (public subnets)
-      # security-groups
-      # auto public-IP => YES
-      # commands:
-      # {
-      #   "containerOverrides": [{
-      #     "name": "rails",
-      #     "command": ["bundle", "exec", "rake", "execution-rake-task"]
-      #   }]
-      # }
-      # => POST
-      # {
-      #   description: '...', # 指定する
-      #   flexible_time_window: { maximum_window_in_minutes: 1, mode: 'OFF' }, # required / OFF固定でいい
-      #   group_name: '...', # identifier (application name "[appname]-[production]-rails") を指定する
-      #   name: '...', # required / identifier + 各種パラメータのダイジェスト
-      #   schedule_expression: '...', # required
-      #   schedule_expression_timezone: 'Asia/Tokyo', # option だが初期値を Tokyo にしておく
-      #   state: 'ENABLED', # option にある
-      #   target: (SEE: lib/elastic_whenever/task/target.rb),
-      #   input: '???', # input_json, { containerOverrides: [{ name: '$task-name', command: commands }]
-      #   role_arn: '' # 指定されたやつ or 作ったやつ
-      # }
-      #
+      def input_json
+        {
+          containerOverrides: [
+            {
+              name: option.container,
+              command: commands
+            }
+          ]
+        }.to_json
+      end
+
+      def target_hash # rubocop:disable Metrics
+        {
+          arn: cluster.arn, # required / ECS Cluster の ARN
+          ecs_parameters: {
+            launch_type: 'FARGATE', # => OR option.launch_type
+            network_configuration: {
+              awsvpc_configuration: {
+                assign_public_ip: 'ENABLED', # => OR option.assign_public_ip
+                security_groups: option.security_groups,
+                subnets: option.subnets
+              }
+            },
+            platform_version: 'LATEST', # OR option.platform_version
+            task_count: 1,
+            task_definition_arn: definition.arn
+          }
+        }
+      end
 
       def delete
         # FIXME: EventBridge では target を rule とは別管理しているようだが Scheduler ではそうならない？

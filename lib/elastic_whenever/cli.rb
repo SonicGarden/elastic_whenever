@@ -1,5 +1,5 @@
 module ElasticWhenever
-  class CLI
+  class CLI # rubocop:disable Metrics
     SUCCESS_EXIT_CODE = 0
     ERROR_EXIT_CODE = 1
 
@@ -10,7 +10,7 @@ module ElasticWhenever
       @option = Option.new(args)
     end
 
-    def run
+    def run # rubocop:disable Metrics
       case option.mode
       when Option::DRYRUN_MODE
         option.validate!
@@ -44,16 +44,14 @@ module ElasticWhenever
       Logger.instance.fail("missing credential error occurred; please specify it with arguments, use shared credentials, or export `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environment variable")
       ERROR_EXIT_CODE
     rescue OptionParser::MissingArgument,
-      Option::InvalidOptionException,
-      Task::Target::InvalidContainerException => exn
-
+      Option::InvalidOptionException => exn
       Logger.instance.fail(exn.message)
       ERROR_EXIT_CODE
     end
 
     private
 
-    def update_tasks(dry_run:)
+    def update_tasks(dry_run:) # rubocop:disable Metrics
       schedule = Schedule.new(option.schedule_file, option.verbose, option.variables)
 
       cluster = Task::Cluster.new(option, option.cluster)
@@ -63,25 +61,21 @@ module ElasticWhenever
         role.create
       end
 
-      # FIXME: targets => event_bridge_schedules
-      targets = schedule.tasks.map do |task|
-        # TODO: schedule_expression_timezone を option から取得できるようにする
+      event_bridge_schedules = schedule.tasks.map do |task|
         task.commands.map do |command|
-          # FIXME: Task::Schedule.new(option, ...)
-          Task::Target.new(
+          Task::Schedule.new(
             option,
             cluster: cluster,
             definition: definition,
-            container: option.container,
-            commands: command,
-            rule: Task::Rule.convert(option, task.expression, 'Asia/Tokyo', command),
             role: role,
+            expression: task.expression,
+            commands: command
           )
         end
       end.flatten
 
       if dry_run
-        print_task(targets)
+        print_task(event_bridge_schedules)
       else
         create_missing_rules_from_targets(targets)
         delete_unused_rules_from_targets(targets)
@@ -95,10 +89,6 @@ module ElasticWhenever
 
     # Creates a rule but only persists the rule remotely if it does not exist
     def create_missing_rules_from_targets(targets)
-      # FIXME: (memo)
-      # => Task::Target から Task::Rule を取得している
-      # => Task:Rule は Task::Target と一緒に new (convert) されている
-
       # FIXME: Rule -> Schedule
       cached_remote_rules = remote_schedules
       targets.each do |target|
@@ -106,11 +96,6 @@ module ElasticWhenever
           target.rule.name == remote_rule.name
         end
 
-        # すでにルールが存在する場合はスキップしている
-        # name が一致するかどうかをチェックしている
-        # name は option の各値と command から SHA1.hexdigest が生成されている
-        # 疑問: リビジョンはどうなる？ 毎回 delete & create の方が安全？
-        # => with_concurrent_modification_handling で retry しているから、作成したものはスキップする必要がありそう
         unless exists
           # FIXME: schedule.create
           # target.rule.create
@@ -133,6 +118,7 @@ module ElasticWhenever
       Task::Rule.fetch(option).each(&:delete)
     end
 
+    # FIXME: メソッドを修正する必要あり
     def list_tasks
       Task::Rule.fetch(option).each do |rule|
         targets = Task::Target.fetch(option, rule)
@@ -144,9 +130,9 @@ module ElasticWhenever
       puts "Elastic Whenever v#{ElasticWhenever::VERSION}"
     end
 
-    def print_task(targets)
-      targets.each do |target|
-        puts "#{target.rule.expression} #{target.cluster.name} #{target.definition.name} #{target.container} #{target.commands.join(" ")}"
+    def print_task(schedules)
+      schedules.each do |schedule|
+        puts "#{schedule.expression} #{schedule.cluster.name} #{schedule.definition.name} #{schedule.container} #{schedule.commands.join(" ")}"
         puts
       end
     end
