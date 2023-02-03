@@ -71,7 +71,7 @@ module ElasticWhenever
             definition: definition,
             role: role,
             expression: task.expression,
-            commands: command
+            command: command
           )
         end
       end.flatten

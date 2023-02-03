@@ -12,7 +12,7 @@ module ElasticWhenever
       attr_reader :cluster
       attr_reader :definition
       attr_reader :role
-      attr_reader :commands
+      attr_reader :command
 
       attr_reader :container
 
@@ -75,7 +75,7 @@ module ElasticWhenever
       end
 
       # FIXME: 引数を見直す必要あり
-      def initialize(option, cluster:, definition:, role:, commands:, expression:, client: nil)
+      def initialize(option, cluster:, definition:, role:, command:, expression:, client: nil)
         container = option.container
         unless definition.containers.include?(container)
           raise InvalidContainerException.new("#{container} is invalid container. valid=#{definition.containers.join(",")}")
@@ -86,13 +86,13 @@ module ElasticWhenever
         @cluster = cluster
         @definition = definition
         @role = role
-        @commands = commands
+        @command = command
 
         @group_name = option.identifier
         @expression = expression
         @expression_timezone = 'Asia/Tokyo'
-        @name = self.class.schedule_name(option, expression, expression_timezone, commands)
-        @description = self.class.schedule_description(option.identifier, expression, expression_timezone, commands)
+        @name = self.class.schedule_name(option, expression, expression_timezone, command)
+        @description = self.class.schedule_description(option.identifier, expression, expression_timezone, command)
 
         @container = container
 
@@ -133,7 +133,7 @@ module ElasticWhenever
           containerOverrides: [
             {
               name: option.container,
-              command: commands
+              command: command
             }
           ]
         }.to_json
