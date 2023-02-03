@@ -79,8 +79,8 @@ module ElasticWhenever
       if dry_run
         print_task(event_bridge_schedules)
       else
-        create_missing_rules_from_targets(targets)
-        delete_unused_rules_from_targets(targets)
+        create_missing_schedules(event_bridge_schedules)
+        delete_unused_schedules(event_bridge_schedules)
       end
     end
 
@@ -90,29 +90,26 @@ module ElasticWhenever
     end
 
     # Creates a rule but only persists the rule remotely if it does not exist
-    def create_missing_rules_from_targets(targets)
-      # FIXME: Rule -> Schedule
-      cached_remote_rules = remote_schedules
-      targets.each do |target|
-        exists = cached_remote_rules.any? do |remote_rule|
-          target.rule.name == remote_rule.name
+    def create_missing_schedules(schedules)
+      cached_remote_schedules = remote_schedules
+      schedules.each do |schedule|
+        exists = cached_remote_schedules.any? do |remote_schedule|
+          schedule.name == remote_schedule.name
         end
 
         unless exists
-          # FIXME: schedule.create
-          # target.rule.create
-          # target.create
+          schedule.create
         end
       end
     end
 
-    def delete_unused_rules_from_targets(targets)
-      remote_rules.each do |remote_rule|
-        rule_exists_in_schedule = targets.any? do |target|
-          target.rule.name == remote_rule.name
+    def delete_unused_schedules(schedules)
+      remote_schedules.each do |remote_schedule|
+        schedule_exists = schedules.any? do |schedule|
+          schedule.rule.name == remote_schedule.name
         end
 
-        remote_rule.delete unless rule_exists_in_schedule
+        remote_schedule.delete unless schedule_exists
       end
     end
 
