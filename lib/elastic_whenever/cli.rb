@@ -44,7 +44,9 @@ module ElasticWhenever
       Logger.instance.fail("missing credential error occurred; please specify it with arguments, use shared credentials, or export `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environment variable")
       ERROR_EXIT_CODE
     rescue OptionParser::MissingArgument,
-      Option::InvalidOptionException => exn
+      Option::InvalidOptionException,
+      Task::Schedule::InvalidContainerException => exn
+
       Logger.instance.fail(exn.message)
       ERROR_EXIT_CODE
     end

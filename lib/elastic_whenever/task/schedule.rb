@@ -16,6 +16,7 @@ module ElasticWhenever
 
       attr_reader :container
 
+      class InvalidContainerException < StandardError; end
       class UnsupportedOptionException < StandardError; end
 
       def self.fetch_names(option, names: [], next_token: nil)
@@ -75,6 +76,11 @@ module ElasticWhenever
 
       # FIXME: 引数を見直す必要あり
       def initialize(option, cluster:, definition:, role:, commands:, expression:, client: nil)
+        container = option.container
+        unless definition.containers.include?(container)
+          raise InvalidContainerException.new("#{container} is invalid container. valid=#{definition.containers.join(",")}")
+        end
+
         @option = option
 
         @cluster = cluster
@@ -88,7 +94,7 @@ module ElasticWhenever
         @name = self.class.schedule_name(option, expression, expression_timezone, commands)
         @description = self.class.schedule_description(option.identifier, expression, expression_timezone, commands)
 
-        @container = option.container
+        @container = container
 
         if client != nil
           @client = client
