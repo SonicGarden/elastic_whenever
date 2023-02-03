@@ -113,16 +113,14 @@ module ElasticWhenever
       end
     end
 
+    # FIXME: メソッドを修正する必要あり
     def clear_tasks
       Task::Rule.fetch(option).each(&:delete)
     end
 
     # FIXME: メソッドを修正する必要あり
     def list_tasks
-      Task::Rule.fetch(option).each do |rule|
-        targets = Task::Target.fetch(option, rule)
-        print_task(targets)
-      end
+      print_task(Task::Schedule.fetch(option))
     end
 
     def print_version
