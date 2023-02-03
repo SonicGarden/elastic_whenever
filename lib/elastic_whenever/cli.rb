@@ -85,8 +85,7 @@ module ElasticWhenever
     end
 
     def remote_schedules
-      schedule_names = Task::Schedule.fetch_names(option)
-      Task::Schedule.fetch(option, names: schedule_names)
+      Task::Schedule.fetch(option)
     end
 
     # Creates a rule but only persists the rule remotely if it does not exist
@@ -113,12 +112,10 @@ module ElasticWhenever
       end
     end
 
-    # FIXME: メソッドを修正する必要あり
     def clear_tasks
-      Task::Rule.fetch(option).each(&:delete)
+      Task::Schedule.fetch(option).each(&:delete)
     end
 
-    # FIXME: メソッドを修正する必要あり
     def list_tasks
       print_task(Task::Schedule.fetch(option))
     end
