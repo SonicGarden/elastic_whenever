@@ -38,10 +38,11 @@ module ElasticWhenever
       end
 
       # TODO: Rate Limit にかからないように検討する必要あり
-      def self.fetch(option, names:)
+      def self.fetch(option, names: nil)
         client = option.scheduler_client
         group_name = option.identifier
 
+        names ||= fetch_names(option)
         names.map do |name|
           response = client.get_schedule(group_name: group_name, name: name)
 
