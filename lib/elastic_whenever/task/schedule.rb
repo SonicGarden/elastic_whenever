@@ -58,10 +58,6 @@ module ElasticWhenever
         end
       end
 
-      def self.fetch_all(option)
-        fetch(option, names: fetch_names(option))
-      end
-
       def self.convert(option, expression, expression_timezone, command)
         group_name = option.identifier
 
