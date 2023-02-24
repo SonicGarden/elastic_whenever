@@ -37,41 +37,18 @@ module ElasticWhenever
         end
       end
 
-      # TODO: Rate Limit にかからないように検討する必要あり
-      def self.fetch(option, names: nil)
+      def self.delete(option, name:)
         client = option.scheduler_client
         group_name = option.identifier
 
-        names ||= fetch_names(option)
-        names.map do |name|
-          response = client.get_schedule(group_name: group_name, name: name)
-
-          self.new(
-            option,
-            group_name: group_name,
-            name: response.name,
-            expression: response.schedule_expression,
-            expression_timezone: response.schedule_expression_timezone,
-            description: response.description,
-            client: client
-          )
-        end
-      end
-
-      def self.convert(option, expression, expression_timezone, command)
-        group_name = option.identifier
-
-        self.new(
-          option,
+        Logger.instance.message("Removing Schedule: #{group_name}/#{name}")
+        
+        client.delete_schedule(
           group_name: group_name,
-          name: schedule_name(option, expression, expression_timezone, command),
-          expression: expression,
-          expression_timezone: expression_timezone,
-          description: schedule_description(option.identifier, expression, expression_timezone, command)
+          name: name
         )
       end
 
-      # FIXME: 引数を見直す必要あり
       def initialize(option, cluster:, definition:, role:, command:, expression:, client: nil)
         container = option.container
         unless definition.containers.include?(container)
@@ -82,6 +59,7 @@ module ElasticWhenever
 
         @cluster = cluster
         @definition = definition
+        @container = container
         @role = role
         @command = command
 
@@ -91,7 +69,6 @@ module ElasticWhenever
         @name = self.class.schedule_name(option, expression, expression_timezone, command)
         @description = self.class.schedule_description(option.identifier, expression, expression_timezone, command)
 
-        @container = container
 
         if client != nil
           @client = client
@@ -103,8 +80,6 @@ module ElasticWhenever
       def create # rubocop:disable Metrics
         # See https://docs.aws.amazon.com/sdk-for-ruby/v3/api/Aws/Scheduler/Client.html#create_schedule-instance_method
         Logger.instance.message("Creating Schedule: #{group_name}/#{name} #{expression}")
-
-        # FIXME: create_schedule_group をどこで実施するか？
 
         # NOTE: このメソッドがよばれるときは schedule_group が存在する前提
         client.create_schedule(create_options)
@@ -118,9 +93,7 @@ module ElasticWhenever
           schedule_expression_timezone: expression_timezone,
           description: truncate(description, 512),
           state: option.rule_state,
-          flexible_time_window: { maximum_window_in_minutes: 1, mode: 'OFF' },
-          input: input_json,
-          role_arn: role.arn,
+          flexible_time_window: { mode: 'OFF' }, # MaximumWindowInMinutes must not be provided when FlexibleTimeWindowMode is set to OFF.
           target: target_hash
         }
       end
@@ -139,6 +112,7 @@ module ElasticWhenever
       def target_hash # rubocop:disable Metrics
         {
           arn: cluster.arn, # required / ECS Cluster の ARN
+          role_arn: role.arn,
           ecs_parameters: {
             launch_type: 'FARGATE', # => OR option.launch_type
             network_configuration: {
@@ -151,21 +125,9 @@ module ElasticWhenever
             platform_version: 'LATEST', # OR option.platform_version
             task_count: 1,
             task_definition_arn: definition.arn
-          }
+          },
+          input: input_json,
         }
-      end
-
-      def delete
-        # FIXME: EventBridge では target を rule とは別管理しているようだが Scheduler ではそうならない？
-        # targets = client.list_targets_by_rule(rule: name).targets
-        # client.remove_targets(rule: name, ids: targets.map(&:id)) unless targets.empty?
-
-        Logger.instance.message("Removing Schedule: #{group_name}/#{name}")
-
-        client.delete_schedule(
-          group_name: group_name,
-          name: name
-        )
       end
 
       private

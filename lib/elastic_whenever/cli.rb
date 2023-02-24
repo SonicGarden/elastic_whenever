@@ -19,14 +19,19 @@ module ElasticWhenever
         Logger.instance.message("Run `elastic_whenever --help' for more options.")
       when Option::UPDATE_MODE
         option.validate!
-        with_concurrent_modification_handling do
-          update_tasks(dry_run: false)
-        end
+
+        # with_concurrent_modification_handling do
+        #   update_tasks(dry_run: false)
+        # end
+        update_tasks(dry_run: false)
+
         Logger.instance.log("write", "scheduled tasks updated")
       when Option::CLEAR_MODE
-        with_concurrent_modification_handling do
-          clear_tasks
-        end
+        # with_concurrent_modification_handling do
+        #   clear_tasks
+        # end
+        clear_tasks
+
         Logger.instance.log("write", "scheduled tasks cleared")
       when Option::LIST_MODE
         list_tasks
@@ -84,16 +89,15 @@ module ElasticWhenever
       end
     end
 
-    def remote_schedules
-      Task::Schedule.fetch(option)
+    def remote_schedule_names
+      @remote_schedule_names ||= Task::Schedule.fetch_names(option)
     end
 
     # Creates a rule but only persists the rule remotely if it does not exist
     def create_missing_schedules(schedules)
-      cached_remote_schedules = remote_schedules
       schedules.each do |schedule|
-        exists = cached_remote_schedules.any? do |remote_schedule|
-          schedule.name == remote_schedule.name
+        exists = remote_schedule_names.any? do |remote_schedule_name|
+          schedule.name == remote_schedule_names
         end
 
         unless exists
@@ -103,17 +107,21 @@ module ElasticWhenever
     end
 
     def delete_unused_schedules(schedules)
-      remote_schedules.each do |remote_schedule|
+      remote_schedule_names.any? do |remote_schedule_name|
         schedule_exists = schedules.any? do |schedule|
-          schedule.rule.name == remote_schedule.name
+          schedule.rule.name == remote_schedule_name
         end
 
-        remote_schedule.delete unless schedule_exists
+        unless schedule_exists
+          Task::Schedule.delete(option, name: remote_schedule_name)
+        end
       end
     end
 
     def clear_tasks
-      Task::Schedule.fetch(option).each(&:delete)
+      remote_schedule_names.each do |remote_schedule_name|
+        Task::Schedule.delete(option, name: remote_schedule_name)
+      end
     end
 
     def list_tasks
@@ -126,11 +134,12 @@ module ElasticWhenever
 
     def print_task(schedules)
       schedules.each do |schedule|
-        puts "#{schedule.expression} #{schedule.cluster.name} #{schedule.definition.name} #{schedule.container} #{schedule.commands.join(" ")}"
+        puts "#{schedule.expression} #{schedule.cluster.name} #{schedule.definition.name} #{schedule.container} #{schedule.command.join(" ")}"
         puts
       end
     end
 
+    # FIXME: Aws::Scheduler でのリトライを検討する必要がある
     def with_concurrent_modification_handling
       Retryable.retryable(
         tries: 5,
