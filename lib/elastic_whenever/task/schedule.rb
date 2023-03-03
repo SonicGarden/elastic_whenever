@@ -42,7 +42,7 @@ module ElasticWhenever
         group_name = option.identifier
 
         Logger.instance.message("Removing Schedule: #{group_name}/#{name}")
-        
+
         client.delete_schedule(
           group_name: group_name,
           name: name
@@ -133,7 +133,9 @@ module ElasticWhenever
       private
 
       def self.schedule_name(option, expression, expression_timezone, command)
-        "#{option.identifier}_#{Digest::SHA1.hexdigest([option.key, expression, expression_timezone, command.join("-")].join("-"))}"
+        # FIXME: scheduler name の生成については再検討する
+        # "#{option.identifier}_#{Digest::SHA1.hexdigest([option.key, expression, expression_timezone, command.join("-")].join("-"))}"
+        command.join("-").gsub(":", "_")
       end
 
       def self.schedule_description(identifier, expression, expression_timezone, command)
