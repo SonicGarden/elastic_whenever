@@ -3,7 +3,7 @@ require "spec_helper"
 RSpec.describe ElasticWhenever::Task::Rule do
   let(:client) { double("client") }
   let(:option) { ElasticWhenever::Option.new(%w(-i test)) }
-  before { allow(Aws::CloudWatchEvents::Client).to receive(:new).and_return(client) }
+  before { allow(Aws::Scheduler::Client).to receive(:new).and_return(client) }
 
   describe "fetch" do
     let(:rule_call_1) do

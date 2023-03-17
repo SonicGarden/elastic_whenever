@@ -41,7 +41,10 @@ module ElasticWhenever
               Sid: "",
               Effect: "Allow",
               Principal: {
-                Service: "events.amazonaws.com",
+                Service: [
+                  "scheduler.amazonaws.com",
+                  "events.amazonaws.com", # TODO: EventBridge Rule を利用しないならば削除する
+                ],
               },
               Action: "sts:AssumeRole",
             }

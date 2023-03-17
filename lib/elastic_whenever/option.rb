@@ -26,7 +26,7 @@ module ElasticWhenever
     attr_reader :aws_config
     attr_reader :ecs_client
     attr_reader :iam_client
-    attr_reader :cloudwatch_events_client
+    attr_reader :scheduler_client
 
     class InvalidOptionException < StandardError; end
 
@@ -45,7 +45,7 @@ module ElasticWhenever
       @subnets = []
       @schedule_file = 'config/schedule.rb'
       @iam_role = 'ecsEventsRole'
-      @rule_state = 'ENABLED'
+      @rule_state = 'ENABLED' # FIXME: schedule_state = 'ENABLED'
       @profile = nil
       @access_key = nil
       @secret_key = nil
@@ -105,8 +105,8 @@ module ElasticWhenever
         opts.on('--iam-role name', 'IAM role name used by CloudWatch Events. Default: ecsEventsRole') do |role|
           @iam_role = role
         end
-        opts.on('--rule-state state', 'The state of the CloudWatch Events Rule. Default: ENABLED') do |state|
-          @rule_state = state
+        opts.on('--rule-state state', 'The state of the EventBridge Scheduler. Default: ENABLED') do |state|
+          @rule_state = state # FIXME: schedule_state にするべきか？
         end
         opts.on('--profile profile_name', 'AWS shared profile name') do |profile|
           @profile = profile
@@ -147,8 +147,8 @@ module ElasticWhenever
       @iam_client ||= Aws::IAM::Client.new(aws_config)
     end
 
-    def cloudwatch_events_client
-      @cloudwatch_events_client ||= Aws::CloudWatchEvents::Client.new(aws_config)
+    def scheduler_client
+      @scheduler_client ||= Aws::Scheduler::Client.new(aws_config)
     end
 
     def validate!

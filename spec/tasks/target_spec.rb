@@ -9,6 +9,7 @@ RSpec.describe ElasticWhenever::Task::Target do
   let(:role) { double(arn: "arn:aws:ecs:us-east-1:123456789:role/testRole") }
 
   before do
+    # FIXME: Aws::Scheduler::Client
     allow(Aws::CloudWatchEvents::Client).to receive(:new).and_return(client)
   end
 

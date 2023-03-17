@@ -1,5 +1,5 @@
 module ElasticWhenever
-  class CLI
+  class CLI # rubocop:disable Metrics
     SUCCESS_EXIT_CODE = 0
     ERROR_EXIT_CODE = 1
 
@@ -10,7 +10,7 @@ module ElasticWhenever
       @option = Option.new(args)
     end
 
-    def run
+    def run # rubocop:disable Metrics
       case option.mode
       when Option::DRYRUN_MODE
         option.validate!
@@ -19,14 +19,19 @@ module ElasticWhenever
         Logger.instance.message("Run `elastic_whenever --help' for more options.")
       when Option::UPDATE_MODE
         option.validate!
-        with_concurrent_modification_handling do
-          update_tasks(dry_run: false)
-        end
+
+        # with_concurrent_modification_handling do
+        #   update_tasks(dry_run: false)
+        # end
+        update_tasks(dry_run: false)
+
         Logger.instance.log("write", "scheduled tasks updated")
       when Option::CLEAR_MODE
-        with_concurrent_modification_handling do
-          clear_tasks
-        end
+        # with_concurrent_modification_handling do
+        #   clear_tasks
+        # end
+        clear_tasks
+
         Logger.instance.log("write", "scheduled tasks cleared")
       when Option::LIST_MODE
         list_tasks
@@ -45,7 +50,7 @@ module ElasticWhenever
       ERROR_EXIT_CODE
     rescue OptionParser::MissingArgument,
       Option::InvalidOptionException,
-      Task::Target::InvalidContainerException => exn
+      Task::Schedule::InvalidContainerException => exn
 
       Logger.instance.fail(exn.message)
       ERROR_EXIT_CODE
@@ -53,7 +58,7 @@ module ElasticWhenever
 
     private
 
-    def update_tasks(dry_run:)
+    def update_tasks(dry_run:) # rubocop:disable Metrics
       schedule = Schedule.new(option.schedule_file, option.verbose, option.variables)
 
       cluster = Task::Cluster.new(option, option.cluster)
@@ -63,79 +68,78 @@ module ElasticWhenever
         role.create
       end
 
-      targets = schedule.tasks.map do |task|
+      event_bridge_schedules = schedule.tasks.map do |task|
         task.commands.map do |command|
-          Task::Target.new(
+          Task::Schedule.new(
             option,
             cluster: cluster,
             definition: definition,
-            container: option.container,
-            commands: command,
-            rule: Task::Rule.convert(option, task.expression, command),
             role: role,
+            expression: task.expression,
+            command: command
           )
         end
       end.flatten
 
       if dry_run
-        print_task(targets)
+        print_task(event_bridge_schedules)
       else
-        create_missing_rules_from_targets(targets)
-        delete_unused_rules_from_targets(targets)
+        create_missing_schedules(event_bridge_schedules)
+        delete_unused_schedules(event_bridge_schedules)
       end
     end
 
-    def remote_rules
-      Task::Rule.fetch(option)
+    def remote_schedule_names
+      @remote_schedule_names ||= Task::Schedule.fetch_names(option)
     end
 
     # Creates a rule but only persists the rule remotely if it does not exist
-    def create_missing_rules_from_targets(targets)
-      cached_remote_rules = remote_rules
-      targets.each do |target|
-        exists = cached_remote_rules.any? do |remote_rule|
-          target.rule.name == remote_rule.name
+    def create_missing_schedules(schedules)
+      schedules.each do |schedule|
+        exists = remote_schedule_names.any? do |remote_schedule_name|
+          schedule.name == remote_schedule_names
         end
 
         unless exists
-          target.rule.create
-          target.create
+          schedule.create
         end
       end
     end
 
-    def delete_unused_rules_from_targets(targets)
-      remote_rules.each do |remote_rule|
-        rule_exists_in_schedule = targets.any? do |target|
-          target.rule.name == remote_rule.name
+    def delete_unused_schedules(schedules)
+      remote_schedule_names.any? do |remote_schedule_name|
+        schedule_exists = schedules.any? do |schedule|
+          schedule.rule.name == remote_schedule_name
         end
 
-        remote_rule.delete unless rule_exists_in_schedule
+        unless schedule_exists
+          Task::Schedule.delete(option, name: remote_schedule_name)
+        end
       end
     end
 
     def clear_tasks
-      Task::Rule.fetch(option).each(&:delete)
+      remote_schedule_names.each do |remote_schedule_name|
+        Task::Schedule.delete(option, name: remote_schedule_name)
+      end
     end
 
     def list_tasks
-      Task::Rule.fetch(option).each do |rule|
-        targets = Task::Target.fetch(option, rule)
-        print_task(targets)
-      end
+      print_task(Task::Schedule.fetch(option))
     end
 
     def print_version
       puts "Elastic Whenever v#{ElasticWhenever::VERSION}"
     end
 
-    def print_task(targets)
-      targets.each do |target|
-        puts "#{target.rule.expression} #{target.cluster.name} #{target.definition.name} #{target.container} #{target.commands.join(" ")}"
+    def print_task(schedules)
+      schedules.each do |schedule|
+        puts "#{schedule.expression} #{schedule.cluster.name} #{schedule.definition.name} #{schedule.container} #{schedule.command.join(" ")}"
         puts
       end
     end
 
+    # FIXME: Aws::Scheduler でのリトライを検討する必要がある
     def with_concurrent_modification_handling
       Retryable.retryable(
         tries: 5,

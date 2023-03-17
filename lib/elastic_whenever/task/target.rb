@@ -1,6 +1,6 @@
 module ElasticWhenever
   class Task
-    class Target
+    class Target # FIXME: このクラスは不要になる
       attr_reader :cluster
       attr_reader :definition
       attr_reader :container
@@ -15,6 +15,7 @@ module ElasticWhenever
       class InvalidContainerException < StandardError; end
 
       def self.fetch(option, rule)
+        # FIXME: scheduler_client
         client = option.cloudwatch_events_client
         targets = client.list_targets_by_rule(rule: rule.name).targets
         targets.map do |target|
@@ -51,20 +52,21 @@ module ElasticWhenever
         @client = option.cloudwatch_events_client
       end
 
-      def create
-        client.put_targets(
-          rule: rule.name,
-          targets: [
-            {
-              id: Digest::SHA1.hexdigest(commands.join("-")),
-              arn: cluster.arn,
-              input: input_json(container, commands),
-              role_arn: role.arn,
-              ecs_parameters: ecs_parameters,
-            }
-          ]
-        )
-      end
+      # schedule と一緒に作成するので不要
+      # def create
+      #   client.put_targets(
+      #     rule: rule.name,
+      #     targets: [
+      #       {
+      #         id: Digest::SHA1.hexdigest(commands.join("-")),
+      #         arn: cluster.arn,
+      #         input: input_json(container, commands),
+      #         role_arn: role.arn,
+      #         ecs_parameters: ecs_parameters,
+      #       }
+      #     ]
+      #   )
+      # end
 
       private
 
